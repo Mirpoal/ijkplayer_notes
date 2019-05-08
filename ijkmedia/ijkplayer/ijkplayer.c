@@ -398,6 +398,7 @@ static int ijkmp_prepare_async_l(IjkMediaPlayer *mp)
     MPST_RET_IF_EQ(mp->mp_state, MP_STATE_ERROR);
     MPST_RET_IF_EQ(mp->mp_state, MP_STATE_END);
 
+	// 检查数据源是否正确
     assert(mp->data_source);
 
     ijkmp_change_state_l(mp, MP_STATE_ASYNC_PREPARING);
@@ -406,6 +407,8 @@ static int ijkmp_prepare_async_l(IjkMediaPlayer *mp)
 
     // released in msg_loop
     ijkmp_inc_ref(mp);
+
+	// 启动消息线程
     mp->msg_thread = SDL_CreateThreadEx(&mp->_msg_thread, ijkmp_msg_loop, mp, "ff_msg_loop");
     // msg_thread is detached inside msg_loop
     // TODO: 9 release weak_thiz if pthread_create() failed;

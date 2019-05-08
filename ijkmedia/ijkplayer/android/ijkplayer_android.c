@@ -33,10 +33,12 @@
 
 IjkMediaPlayer *ijkmp_android_create(int(*msg_loop)(void*))
 {
+	// 创建 ijkmp 对象，并初始化 ijkmp 的消息队列
     IjkMediaPlayer *mp = ijkmp_create(msg_loop);
     if (!mp)
         goto fail;
 
+	// 为 Android 设备创建输出设备  vout
     mp->ffplayer->vout = SDL_VoutAndroid_CreateForAndroidSurface();
     if (!mp->ffplayer->vout)
         goto fail;

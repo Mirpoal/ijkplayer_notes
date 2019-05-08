@@ -34,6 +34,9 @@ static void func_destroy(IJKFF_Pipenode *node)
     // do nothing
 }
 
+/**
+* ffplay 中的 video async 方法
+*/
 static int func_run_sync(IJKFF_Pipenode *node)
 {
     IJKFF_Pipenode_Opaque *opaque = node->opaque;

@@ -209,6 +209,7 @@ typedef struct Clock {
 } Clock;
 
 /* Common struct for handling all types of decoded data and allocated render buffers. */
+// 用于处理所有类型的解码数据和分配的渲染buffers公共对象
 typedef struct Frame {
     AVFrame *frame;
     AVSubtitle sub;
@@ -229,6 +230,7 @@ typedef struct Frame {
     int uploaded;
 } Frame;
 
+// ffplay 定义的 FrameQueue
 typedef struct FrameQueue {
     Frame queue[FRAME_QUEUE_SIZE];
     int rindex;

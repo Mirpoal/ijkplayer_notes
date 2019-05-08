@@ -29,6 +29,9 @@
 #include "ijksdl_android_jni.h"
 #include "ijksdl_vout_android_nativewindow.h"
 
+/**
+* Android平台创建视频输出方法
+*/
 SDL_Vout *SDL_VoutAndroid_CreateForAndroidSurface()
 {
     return SDL_VoutAndroid_CreateForANativeWindow();

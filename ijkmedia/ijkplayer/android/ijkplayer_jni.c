@@ -254,14 +254,21 @@ LABEL_RETURN:
     return;
 }
 
+/**
+* 启动播放器入口
+* 设置 player 选项，打开 audio output,最重要的是调用 stream_open 方法
+*/
 static void
 IjkMediaPlayer_prepareAsync(JNIEnv *env, jobject thiz)
 {
     MPTRACE("%s\n", __func__);
     int retval = 0;
+
+	// 从 JNI 中获取 player
     IjkMediaPlayer *mp = jni_get_media_player(env, thiz);
     JNI_CHECK_GOTO(mp, env, "java/lang/IllegalStateException", "mpjni: prepareAsync: null mp", LABEL_RETURN);
 
+	// 为 ijkmp 准备同步环境
     retval = ijkmp_prepare_async(mp);
     IJK_CHECK_MPRET_GOTO(retval, env, LABEL_RETURN);
 
@@ -746,13 +753,22 @@ IjkMediaPlayer_native_init(JNIEnv *env)
     MPTRACE("%s\n", __func__);
 }
 
+/**
+* 完成 ijkplayer 播放器初始化相关流程，创建播放器对象，完成音视频解码、渲染的准备工作
+* 1、创建 IjkMediaPlayer 对象，并设置消息处理函数
+* 2、创建图像渲染对象 SDL_vout
+* 3、创建平台相关的 IJKFF_Pipeline 对象，包含视频解码及音频输出部分
+*/
 static void
 IjkMediaPlayer_native_setup(JNIEnv *env, jobject thiz, jobject weak_this)
 {
     MPTRACE("%s\n", __func__);
+	
+	// 创建一个  ijkmp , 传入 message_loop 函数指针用于指定 ijkmp 的消息队列
     IjkMediaPlayer *mp = ijkmp_android_create(message_loop);
     JNI_CHECK_GOTO(mp, env, "java/lang/OutOfMemoryError", "mpjni: native_setup: ijkmp_create() failed", LABEL_RETURN);
 
+	// 保存当前 player
     jni_set_media_player(env, thiz, mp);
     ijkmp_set_weak_thiz(mp, (*env)->NewGlobalRef(env, weak_this));
     ijkmp_set_inject_opaque(mp, ijkmp_get_weak_thiz(mp));
@@ -1157,7 +1173,9 @@ static JNINativeMethod g_methods[] = {
     { "setVolume",              "(FF)V",    (void *) IjkMediaPlayer_setVolume },
     { "getAudioSessionId",      "()I",      (void *) IjkMediaPlayer_getAudioSessionId },
     { "native_init",            "()V",      (void *) IjkMediaPlayer_native_init },
-    { "native_setup",           "(Ljava/lang/Object;)V", (void *) IjkMediaPlayer_native_setup },
+
+	//  ijkMediaPlayer 初始化
+    { "native_setup",           "(Ljava/lang/Object;)V", (void *) IjkMediaPlayer_native_setup },   
     { "native_finalize",        "()V",      (void *) IjkMediaPlayer_native_finalize },
 
     { "_setOption",             "(ILjava/lang/String;Ljava/lang/String;)V", (void *) IjkMediaPlayer_setOption },
@@ -1198,9 +1216,11 @@ JNIEXPORT jint JNI_OnLoad(JavaVM *vm, void *reserved)
     IJK_FIND_JAVA_CLASS(env, g_clazz.clazz, JNI_CLASS_IJKPLAYER);
     (*env)->RegisterNatives(env, g_clazz.clazz, g_methods, NELEM(g_methods) );
 
+	// ffmpeg 的初始化工作
     ijkmp_global_init();
     ijkmp_global_set_inject_callback(inject_callback);
 
+	// 初始化 FFmpegApi
     FFmpegApi_global_init(env);
 
     return JNI_VERSION_1_4;

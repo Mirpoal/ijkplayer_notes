@@ -565,7 +565,7 @@ fail0:
 
 static int decoder_decode_frame(FFPlayer *ffp, Decoder *d, AVFrame *frame, AVSubtitle *sub) {
     int ret = AVERROR(EAGAIN);
-
+	
     for (;;) {
         AVPacket pkt;
 
@@ -576,6 +576,7 @@ static int decoder_decode_frame(FFPlayer *ffp, Decoder *d, AVFrame *frame, AVSub
 
                 switch (d->avctx->codec_type) {
                     case AVMEDIA_TYPE_VIDEO:
+						
                         ret = avcodec_receive_frame(d->avctx, frame);
                         if (ret >= 0) {
                             ffp->stat.vdps = SDL_SpeedSamplerAdd(&ffp->vdps_sampler, FFP_SHOW_VDPS_AVCODEC, "vdps[avcodec]");
@@ -869,6 +870,9 @@ static size_t parse_ass_subtitle(const char *ass, char *output)
     return 0;
 }
 
+/**
+* 渲染图像方法
+*/
 static void video_image_display2(FFPlayer *ffp)
 {
     VideoState *is = ffp->is;
@@ -908,6 +912,8 @@ static void video_image_display2(FFPlayer *ffp)
                 SDL_Delay(20);
             }
         }
+
+		// 绘制图像
         SDL_VoutDisplayYUVOverlay(ffp->vout, vp->bmp);
         ffp->stat.vfps = SDL_SpeedSamplerAdd(&ffp->vfps_sampler, FFP_SHOW_VFPS_FFPLAY, "vfps[ffplay]");
         if (!ffp->first_video_frame_rendered) {
@@ -1303,6 +1309,9 @@ static void update_video_pts(VideoState *is, double pts, int64_t pos, int serial
 }
 
 /* called to display each frame */
+/**
+* 渲染函数
+*/
 static void video_refresh(FFPlayer *opaque, double *remaining_time)
 {
     FFPlayer *ffp = opaque;
@@ -2335,11 +2344,15 @@ static int ffplay_video_thread(void *arg)
     return 0;
 }
 
+/**
+* 视频解码流程
+*/
 static int video_thread(void *arg)
 {
     FFPlayer *ffp = (FFPlayer *)arg;
     int       ret = 0;
 
+	// 调用 ffplay 对象中的 IJKFF_Pipenode 对象的 func_run_sync 方法进行同步
     if (ffp->node_vdec) {
         ret = ffpipenode_run_sync(ffp->node_vdec);
     }
@@ -2804,6 +2817,10 @@ static int audio_open(FFPlayer *opaque, int64_t wanted_channel_layout, int wante
 }
 
 /* open a given stream. Return 0 if OK */
+/**
+* 用于打开视频/音频/字幕解码的线程
+* 
+*/
 static int stream_component_open(FFPlayer *ffp, int stream_index)
 {
     VideoState *is = ffp->is;
@@ -2824,11 +2841,14 @@ static int stream_component_open(FFPlayer *ffp, int stream_index)
     if (!avctx)
         return AVERROR(ENOMEM);
 
+	// 将音视频信息拷贝到 AVCodecContext 中
     ret = avcodec_parameters_to_context(avctx, ic->streams[stream_index]->codecpar);
     if (ret < 0)
         goto fail;
+	
     av_codec_set_pkt_timebase(avctx, ic->streams[stream_index]->time_base);
 
+	// 获得解码器
     codec = avcodec_find_decoder(avctx->codec_id);
 
     switch (avctx->codec_type) {
@@ -2837,6 +2857,7 @@ static int stream_component_open(FFPlayer *ffp, int stream_index)
         case AVMEDIA_TYPE_VIDEO   : is->last_video_stream    = stream_index; forced_codec_name = ffp->video_codec_name; break;
         default: break;
     }
+	// 强制使用某种解码器
     if (forced_codec_name)
         codec = avcodec_find_decoder_by_name(forced_codec_name);
     if (!codec) {
@@ -2873,6 +2894,8 @@ static int stream_component_open(FFPlayer *ffp, int stream_index)
         av_dict_set_int(&opts, "lowres", stream_lowres, 0);
     if (avctx->codec_type == AVMEDIA_TYPE_VIDEO || avctx->codec_type == AVMEDIA_TYPE_AUDIO)
         av_dict_set(&opts, "refcounted_frames", "1", 0);
+
+	// 打开解码器
     if ((ret = avcodec_open2(avctx, codec, &opts)) < 0) {
         goto fail;
     }
@@ -2938,11 +2961,28 @@ static int stream_component_open(FFPlayer *ffp, int stream_index)
             is->auddec.start_pts = is->audio_st->start_time;
             is->auddec.start_pts_tb = is->audio_st->time_base;
         }
+		/**
+		* 创建音频解码线程
+		*/
         if ((ret = decoder_start(&is->auddec, audio_thread, ffp, "ff_audio_dec")) < 0)
             goto out;
+
+		// SDL 中播放音频
         SDL_AoutPauseAudio(ffp->aout, 0);
         break;
     case AVMEDIA_TYPE_VIDEO:
+
+		av_log(NULL, AV_LOG_DEBUG, "======= avcodectx options ======");
+		av_log(NULL, AV_LOG_DEBUG, "avcodectx flags2 :", avctx->flags2);
+		av_log(NULL, AV_LOG_DEBUG, "avcodectx flags :", avctx->flags);
+		av_log(NULL, AV_LOG_DEBUG, "avcodectx skip_idct :", avctx->skip_idct);
+		av_log(NULL, AV_LOG_DEBUG, "avcodectx idct_algo :", avctx->idct_algo);
+		av_log(NULL, AV_LOG_DEBUG, "avcodectx has_b_frames :", avctx->has_b_frames);
+		av_log(NULL, AV_LOG_DEBUG, "avcodectx capabilities :", avctx->capabilities);
+		av_log(NULL, AV_LOG_DEBUG, "avcodectx thread_count :", avctx->thread_count);
+		av_log(NULL, AV_LOG_DEBUG, "avcodectx thread_type :", avctx->thread_type);
+		av_log(NULL, AV_LOG_DEBUG, "======= avcodectx options ======");
+		
         is->video_stream = stream_index;
         is->video_st = ic->streams[stream_index];
 
@@ -2956,7 +2996,8 @@ static int stream_component_open(FFPlayer *ffp, int stream_index)
             }
             if (ret || !ffp->node_vdec) {
                 decoder_init(&is->viddec, avctx, &is->videoq, is->continue_read_thread);
-                ffp->node_vdec = ffpipeline_open_video_decoder(ffp->pipeline, ffp);
+				// 
+				ffp->node_vdec = ffpipeline_open_video_decoder(ffp->pipeline, ffp);
                 if (!ffp->node_vdec)
                     goto fail;
             }
@@ -2966,6 +3007,9 @@ static int stream_component_open(FFPlayer *ffp, int stream_index)
             if (!ffp->node_vdec)
                 goto fail;
         }
+		/**
+		* 创建视频解码线程
+		*/
         if ((ret = decoder_start(&is->viddec, video_thread, ffp, "ff_video_dec")) < 0)
             goto out;
 
@@ -3009,7 +3053,11 @@ static int stream_component_open(FFPlayer *ffp, int stream_index)
         ffp_set_subtitle_codec_info(ffp, AVCODEC_MODULE_NAME, avcodec_get_name(avctx->codec_id));
 
         decoder_init(&is->subdec, avctx, &is->subtitleq, is->continue_read_thread);
-        if ((ret = decoder_start(&is->subdec, subtitle_thread, ffp, "ff_subtitle_dec")) < 0)
+
+		/**
+		* 创建字幕解码线程
+		*/
+		if ((ret = decoder_start(&is->subdec, subtitle_thread, ffp, "ff_subtitle_dec")) < 0)
             goto out;
         break;
     default:
@@ -3058,6 +3106,10 @@ static int is_realtime(AVFormatContext *s)
 }
 
 /* this thread gets the stream from the disk or the network */
+/**
+* 读数据线程
+* 
+*/
 static int read_thread(void *arg)
 {
     FFPlayer *ffp = arg;
@@ -3090,12 +3142,14 @@ static int read_thread(void *arg)
     is->last_subtitle_stream = is->subtitle_stream = -1;
     is->eof = 0;
 
+	// 分配 avformat context
     ic = avformat_alloc_context();
     if (!ic) {
         av_log(NULL, AV_LOG_FATAL, "Could not allocate context.\n");
         ret = AVERROR(ENOMEM);
         goto fail;
     }
+	// 设置自定义中断函数，如果出错或者退出，可以直接退出 
     ic->interrupt_callback.callback = decode_interrupt_cb;
     ic->interrupt_callback.opaque = is;
     if (!av_dict_get(ffp->format_opts, "scan_all_pmts", NULL, AV_DICT_MATCH_CASE)) {
@@ -3116,6 +3170,14 @@ static int read_thread(void *arg)
 
     if (ffp->iformat_name)
         is->iformat = av_find_input_format(ffp->iformat_name);
+
+	/**
+	* 打开媒体
+	* 1、输入输出结构体 AVIOContext 的初始化
+	* 2、输入数据的协议 (例如 RTMP、RTSP或者 file)的识别 (通过一套评分机制) : 判断文件名的后缀，读取文件头的数据进行比较
+	* 3、使用获得最高分的文件协议对应的 URLProtocol ，通过函数指针的方式，与 FFMPEG 对接
+	* 4、调用该 URLProtocol 的函数进行 open 、 read 等操作
+	*/
     err = avformat_open_input(&ic, is->filename, is->iformat, &ffp->format_opts);
     if (err < 0) {
         print_error(is->filename, err);
@@ -3163,6 +3225,11 @@ static int read_thread(void *arg)
                     break;
                 }
             }
+
+			/**
+			* 探测媒体类型，可得到当前文件的封装格式，音视频编码参数等信息
+			* 读取一部分音视频数据并且获得一些相关信息
+			*/
             err = avformat_find_stream_info(ic, opts);
         } while(0);
         ffp_notify_msg1(ffp, FFP_MSG_FIND_STREAM_INFO);
@@ -3270,6 +3337,9 @@ static int read_thread(void *arg)
 #endif
 
     /* open the streams */
+	/**
+	* 打开视频、音频解码器，在此会打开相应的解码器，并创建相应的解码线程
+	*/
     if (st_index[AVMEDIA_TYPE_AUDIO] >= 0) {
         stream_component_open(ffp, st_index[AVMEDIA_TYPE_AUDIO]);
     } else {
@@ -3343,6 +3413,9 @@ static int read_thread(void *arg)
         ffp_seek_to_l(ffp, (long)(ffp->seek_at_start));
     }
 
+	/**
+	* 不断读取媒体数据并分别装入各自的 queue 中，该数据是解码前数据
+	*/
     for (;;) {
         if (is->abort_request)
             break;
@@ -3512,6 +3585,10 @@ static int read_thread(void *arg)
             }
         }
         pkt->flags = 0;
+
+		/**
+		* 读取媒体数据，得到的是音视频分离的解码前数据
+		*/
         ret = av_read_frame(ic, pkt);
         if (ret < 0) {
             int pb_eof = 0;
@@ -3566,6 +3643,9 @@ static int read_thread(void *arg)
             is->eof = 0;
         }
 
+		/**
+		* 将音视频数据分别装入相应的 queue 中
+		*/
         if (pkt->flags & AV_PKT_FLAG_DISCONTINUITY) {
             if (is->audio_stream >= 0) {
                 packet_queue_put(&is->audioq, &flush_pkt);
@@ -3636,6 +3716,11 @@ static int read_thread(void *arg)
 }
 
 static int video_refresh_thread(void *arg);
+
+/**
+* 打开输入的媒体
+*
+*/
 static VideoState *stream_open(FFPlayer *ffp, const char *filename, AVInputFormat *iformat)
 {
     assert(!ffp->is);
@@ -3657,6 +3742,8 @@ static VideoState *stream_open(FFPlayer *ffp, const char *filename, AVInputForma
 #endif
 
     /* start video display */
+	// 创建存放 video/audio/subtitile 解码器数据的 videoq/audioq及subtitleq 队列
+	// 创建存放 video/audio/subtitle 解码后数据的 pictq/sampq及subpg 队列
     if (frame_queue_init(&is->pictq, &is->videoq, ffp->pictq_size, 1) < 0)
         goto fail;
     if (frame_queue_init(&is->subpq, &is->subtitleq, SUBPICTURE_QUEUE_SIZE, 0) < 0)
@@ -3664,6 +3751,7 @@ static VideoState *stream_open(FFPlayer *ffp, const char *filename, AVInputForma
     if (frame_queue_init(&is->sampq, &is->audioq, SAMPLE_QUEUE_SIZE, 1) < 0)
         goto fail;
 
+	// 初始化解码后的 videoq/audioq/subtitleq 的 PacketQueue
     if (packet_queue_init(&is->videoq) < 0 ||
         packet_queue_init(&is->audioq) < 0 ||
         packet_queue_init(&is->subtitleq) < 0)
@@ -3703,6 +3791,7 @@ static VideoState *stream_open(FFPlayer *ffp, const char *filename, AVInputForma
     ffp->is = is;
     is->pause_req = !ffp->start_on_prepared;
 
+	// 创建重要视频渲染线程 video_refresh_thread
     is->video_refresh_tid = SDL_CreateThreadEx(&is->_video_refresh_tid, video_refresh_thread, ffp, "ff_vout");
     if (!is->video_refresh_tid) {
         av_freep(&ffp->is);
@@ -3710,6 +3799,8 @@ static VideoState *stream_open(FFPlayer *ffp, const char *filename, AVInputForma
     }
 
     is->initialized_decoder = 0;
+
+	// 创建重要数据读取线程 read_thread
     is->read_tid = SDL_CreateThreadEx(&is->_read_tid, read_thread, ffp, "ff_read");
     if (!is->read_tid) {
         av_log(NULL, AV_LOG_FATAL, "SDL_CreateThread(): %s\n", SDL_GetError());
@@ -3755,6 +3846,9 @@ fail:
 // FFP_MERGE: options
 // FFP_MERGE: show_usage
 // FFP_MERGE: show_help_default
+/**
+* 视频渲染线程入口函数
+*/
 static int video_refresh_thread(void *arg)
 {
     FFPlayer *ffp = arg;
@@ -4252,6 +4346,7 @@ int ffp_prepare_async_l(FFPlayer *ffp, const char *file_name)
     assert(!ffp->is);
     assert(file_name);
 
+	// 检测数据源协议头
     if (av_stristart(file_name, "rtmp", NULL) ||
         av_stristart(file_name, "rtsp", NULL)) {
         // There is total different meaning for 'timeout' option in rtmp
@@ -4259,6 +4354,7 @@ int ffp_prepare_async_l(FFPlayer *ffp, const char *file_name)
         av_dict_set(&ffp->format_opts, "timeout", NULL, 0);
     }
 
+	// ijk 私有协议
     /* there is a length limit in avformat */
     if (strlen(file_name) + 1 > 1024) {
         av_log(ffp, AV_LOG_ERROR, "%s too long url\n", __func__);
@@ -4284,6 +4380,7 @@ int ffp_prepare_async_l(FFPlayer *ffp, const char *file_name)
     ffp_show_dict(ffp, "swr-opts   ", ffp->swr_opts);
     av_log(NULL, AV_LOG_INFO, "===================\n");
 
+	// 打开 audio output
     av_opt_set_dict(ffp, &ffp->player_opts);
     if (!ffp->aout) {
         ffp->aout = ffpipeline_open_audio_output(ffp->pipeline, ffp);
@@ -4298,6 +4395,7 @@ int ffp_prepare_async_l(FFPlayer *ffp, const char *file_name)
     }
 #endif
 
+	// stream 处理，ffplay 播放器重要入口函数
     VideoState *is = stream_open(ffp, file_name, NULL);
     if (!is) {
         av_log(NULL, AV_LOG_WARNING, "ffp_prepare_async_l: stream_open failed OOM");

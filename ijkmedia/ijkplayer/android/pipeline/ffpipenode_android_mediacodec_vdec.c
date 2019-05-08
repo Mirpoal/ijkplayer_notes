@@ -1559,6 +1559,9 @@ fail:
     return ret;
 }
 
+/**
+* android mediacodec 中的 video async 方法
+*/
 static int func_run_sync(IJKFF_Pipenode *node)
 {
     JNIEnv                *env      = NULL;

@@ -51,6 +51,8 @@ void SDL_VoutFreeP(SDL_Vout **pvout)
     *pvout = NULL;
 }
 
+// SDL 绘制接口，为了更好的跨平台，例如Android 平台使用OpenGL 渲染，就会调用到
+// ijksdl_vout_android_nativewindow.c 中 func_display_overlay 方法
 int SDL_VoutDisplayYUVOverlay(SDL_Vout *vout, SDL_VoutOverlay *overlay)
 {
     if (vout && overlay && vout->display_overlay)

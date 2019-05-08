@@ -139,6 +139,9 @@ static void func_free_l(SDL_Vout *vout)
     SDL_Vout_FreeInternal(vout);
 }
 
+/**
+* Android 平台具体渲染方法
+*/
 static int func_display_overlay_l(SDL_Vout *vout, SDL_VoutOverlay *overlay)
 {
     SDL_Vout_Opaque *opaque = vout->opaque;
@@ -218,6 +221,7 @@ SDL_Vout *SDL_VoutAndroid_CreateForANativeWindow()
     if (ISDL_Array__init(&opaque->overlay_pool, 32))
         goto fail;
 
+	// 创建一个 Ijk 输出设备使用的 EGL
     opaque->egl = IJK_EGL_create();
     if (!opaque->egl)
         goto fail;
